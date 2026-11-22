@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { useTimeout } from "@rakazo/chat-ui/hooks";
 import type { LinkFavicons } from "@rakazo/chat-ui/web";
 import { LinkFaviconsContext, RemoteImagesContext } from "@rakazo/chat-ui/web";
-import { mobileMcpOAuthReturnUrl } from "@rakazo/contracts";
+import { DEVICE_SIGN_IN_PATH, mobileMcpOAuthReturnUrl } from "@rakazo/contracts";
 import { analyticsScreen } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import {
@@ -60,6 +60,9 @@ const PageReviewHost = lazyComponent(() =>
   import("./components/pages/PageReviewHost").then((module) => module.default),
 );
 const AuthPage = lazyComponent(() => import("./pages/auth/Auth").then((module) => module.AuthPage));
+const DeviceSignInPage = lazyComponent(() =>
+  import("./pages/auth/DeviceSignIn").then((module) => module.DeviceSignInPage),
+);
 const PasswordResetPage = lazyComponent(() =>
   import("./pages/auth/Auth").then((module) => module.PasswordResetPage),
 );
@@ -309,6 +312,16 @@ function SessionApp() {
                     <InvitePage />
                   ) : (
                     <Navigate to={`/sign-in?next=${encodeURIComponent(pathname)}`} replace />
+                  )
+                }
+              />
+              <Route
+                path={DEVICE_SIGN_IN_PATH}
+                element={
+                  user ? (
+                    <DeviceSignInPage />
+                  ) : (
+                    <Navigate to={`/sign-in?next=${DEVICE_SIGN_IN_PATH}`} replace />
                   )
                 }
               />

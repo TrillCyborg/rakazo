@@ -89,6 +89,7 @@ model User {
   scimIdentityTombstones      ScimIdentityTombstone[]
   scimProjectionGrants        ScimProjectionGrant[]
   passkeys                    Passkey[]
+  deviceCodes                 DeviceCode[]
   members                     Member[]
   accessGrants                AccessGrant[]
   invitations                 Invitation[]
@@ -322,6 +323,27 @@ model Passkey {
   @@unique([credentialID])
   @@index([userId])
   @@map("passkey")
+}
+
+/// Better Auth device sign-in (RFC 8628): a device shows `userCode`, a signed-in person
+/// approves it, and the device trades `deviceCode` for its own session. Rows live minutes.
+model DeviceCode {
+  id              String    @id
+  deviceCode      String
+  userCode        String
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt       DateTime
+  status          String
+  lastPolledAt    DateTime?
+  pollingInterval Int?
+  clientId        String?
+  scope           String?
+
+  @@unique([deviceCode])
+  @@unique([userCode])
+  @@index([userId])
+  @@map("device_code")
 }
 
 // Directory provisioning (SCIM 2.0), owned by the auth library's SCIM plugin, which reads and

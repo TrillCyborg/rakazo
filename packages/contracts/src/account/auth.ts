@@ -31,6 +31,9 @@ export type SignInProvider = z.infer<typeof signInProviderSchema>;
 /** Readable by the sign-in page; set only after a sign-in succeeds. Holds a provider id or `email`. */
 export const LAST_SIGN_IN_COOKIE = "rakazo_last_sign_in";
 
+/** The web page where a signed-in person types the code a device shows to sign it in. */
+export const DEVICE_SIGN_IN_PATH = "/device";
+
 /** The chooser button a remembered sign-in method belongs to: a provider id, or `email`. */
 export function lastSignInChoice(method: string | null | undefined): string | null {
   if (!method) return null;

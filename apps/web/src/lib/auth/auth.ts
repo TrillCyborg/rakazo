@@ -2,7 +2,11 @@ import { passkeyClient } from "@better-auth/passkey/client";
 import { SIGNUP_SURFACE_HEADER } from "@rakazo/contracts";
 import { rememberSignupAttribution } from "@rakazo/core/signup-attribution";
 import type { OrganizationClientOptions } from "better-auth/client/plugins";
-import { emailOTPClient, organizationClient } from "better-auth/client/plugins";
+import {
+  deviceAuthorizationClient,
+  emailOTPClient,
+  organizationClient,
+} from "better-auth/client/plugins";
 import type { ReactAuthClient } from "better-auth/react";
 import { createAuthClient } from "better-auth/react";
 import { desktopBridge } from "../platform/desktop";
@@ -16,10 +20,11 @@ export const authClient: ReactAuthClient<{
     ReturnType<typeof organizationClient<OrganizationClientOptions>>,
     ReturnType<typeof emailOTPClient>,
     ReturnType<typeof passkeyClient>,
+    ReturnType<typeof deviceAuthorizationClient>,
   ];
 }> = createAuthClient({
   fetchOptions: {
     headers: { [SIGNUP_SURFACE_HEADER]: signupSurface },
   },
-  plugins: [organizationClient(), emailOTPClient(), passkeyClient()],
+  plugins: [organizationClient(), emailOTPClient(), passkeyClient(), deviceAuthorizationClient()],
 });
