@@ -1,3 +1,4 @@
+import { DEVICE_SIGN_IN_PATH } from "@rakazo/contracts";
 export const MCP_OAUTH_CALLBACK_PATH = "/mcp/oauth/callback";
 export const SLACK_INSTALL_CALLBACK_PATH = "/messaging/slack/callback";
 
@@ -18,6 +19,8 @@ export function signInNext(next: string | null): string | null {
     next === "/integrations/setup" ||
     next === "/admin/plugins" ||
     next === "/admin/access" ||
+    // A device showing a sign-in code sends the person here.
+    next === DEVICE_SIGN_IN_PATH ||
     // The model-connection email opens the connect step.
     next === "/onboarding/model" ||
     // The agent-import email opens the import.

@@ -116,6 +116,10 @@ describe("authRateLimitOptions", () => {
         "/sign-in/email-otp": { window: 15 * 60, max: 10 },
         "/passkey/verify-authentication": { window: 15 * 60, max: 10 },
         "/passkey/verify-registration": { window: 15 * 60, max: 10 },
+        "/device/code": { window: 60, max: 10 },
+        "/device": { window: 15 * 60, max: 10 },
+        "/device/approve": { window: 15 * 60, max: 10 },
+        "/device/deny": { window: 15 * 60, max: 10 },
         "/passkey/generate-authenticate-options": { window: 60, max: 30 },
       },
     });

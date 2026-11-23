@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { expo } from "@better-auth/expo";
 import { passkey } from "@better-auth/passkey";
 import type {
@@ -5,7 +6,13 @@ import type {
   ProductAnalytics,
   TransactionalEmailProvider,
 } from "@rakazo/adapter-kit";
-import { LAST_SIGN_IN_COOKIE, PartnerClickId, SignupAttribution } from "@rakazo/contracts";
+import {
+  DEVICE_SIGN_IN_PATH,
+  isDeviceSignInClient,
+  LAST_SIGN_IN_COOKIE,
+  PartnerClickId,
+  SignupAttribution,
+} from "@rakazo/contracts";
 import {
   displayName,
   emailAllowed,
@@ -36,7 +43,7 @@ import {
   getOAuthState,
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
-import { emailOTP, lastLoginMethod, organization } from "better-auth/plugins";
+import { deviceAuthorization, emailOTP, lastLoginMethod, organization } from "better-auth/plugins";
 import {
   ACCOUNT_EXPORT_TOKEN_PREFIX,
   consumeAccountExportToken,
@@ -196,6 +203,11 @@ export function authRateLimitOptions(
       "/confirm-identity": rule,
       "/passkey/verify-authentication": rule,
       "/passkey/verify-registration": rule,
+      // A device asks for a code before anyone sees it; approving takes a typed code.
+      "/device/code": { window: 60, max: 10 },
+      "/device": rule,
+      "/device/approve": rule,
+      "/device/deny": rule,
       // Sign-in pages request a challenge on load for passkey autofill.
       "/passkey/generate-authenticate-options": { window: 60, max: 30 },
     },
@@ -525,6 +537,13 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
         : []),
       // Marks the method on the sign-in page; written only alongside a new session cookie.
       lastLoginMethod({ cookieName: LAST_SIGN_IN_COOKIE }),
+      // A device without a keyboard signs in by showing a code that a signed-in person types
+      // on the web, then redeems it for a session of its own, revocable like any other.
+      deviceAuthorization({
+        verificationUri: new URL(DEVICE_SIGN_IN_PATH, env.webOrigin).href,
+        expiresIn: "10m",
+        validateClient: (clientId) => isDeviceSignInClient(clientId),
+      }),
       organization({
         allowUserToCreateOrganization: false,
         disableOrganizationDeletion: true,
@@ -739,7 +758,9 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
         }
         const redacted = withoutSessionTokens(ctx.path, returned);
         if (redacted) return ctx.json(redacted);
-        const signed = withSignedSessionToken(ctx.context, returned);
+        const signed =
+          withSignedSessionToken(ctx.context, returned) ??
+          withSignedDeviceToken(ctx.path, ctx.context, returned);
         if (signed) return ctx.json(signed);
       }),
     },
@@ -1046,6 +1067,23 @@ function withSignedSessionToken(
     return { ...returned, session: { ...returned.session, token: signed } };
   }
   return undefined;
+}
+
+/**
+ * A device redeeming its code receives the new session's raw token as `access_token`, with no
+ * cookie to take a signed value from. Sign it as the session cookie is, so the bearer plugin,
+ * which refuses unsigned tokens, accepts it.
+ */
+function withSignedDeviceToken(
+  path: string,
+  context: { newSession: { session: { token: string } } | null; secret: string },
+  returned: unknown,
+): Record<string, unknown> | undefined {
+  const token = context.newSession?.session.token;
+  if (path !== "/device/token" || !token || !isRecord(returned)) return undefined;
+  if (returned.access_token !== token) return undefined;
+  const signature = createHmac("sha256", context.secret).update(token).digest("base64");
+  return { ...returned, access_token: `${token}.${signature}` };
 }
 
 function withoutToken(session: unknown): unknown {
