@@ -33,8 +33,11 @@ trap 'exit 130' INT
 export CONTENT_ENCRYPTION="${CONTENT_ENCRYPTION:-on}"
 export TRUSTED_PROXIES="${TRUSTED_PROXIES:-127.0.0.1}"
 export CLIENT_IP_HEADER="${CLIENT_IP_HEADER:-x-real-ip}"
-pnpm --filter @rakazo/api start &
-pnpm --filter @rakazo/worker start &
+# Each process runs as node itself: a pnpm launcher left waiting in front of each one holds
+# memory for nothing, on plans with little to spare.
+app_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+(cd "$app_root/apps/api" && exec node --enable-source-maps dist/index.js) &
+(cd "$app_root/apps/worker" && exec node --enable-source-maps dist/index.js) &
 (
   node --input-type=module -e '
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -44,8 +47,9 @@ pnpm --filter @rakazo/worker start &
   }
   throw new Error("API did not become ready");
 '
+  cd "$app_root/apps/web"
   exec env -u RAILWAY_API_TOKEN -u DATABASE_URL -u ENCRYPTION_KEY -u ENCRYPTION_MASTER_KEYS -u OBJECT_STORAGE_SECRET_ACCESS_KEY -u OBJECT_STORAGE_CERTIFICATE -u BETTER_AUTH_SECRET \
-    pnpm --filter @rakazo/web preview --host 0.0.0.0 --port 5173
+    node node_modules/vite/bin/vite.js preview --host 0.0.0.0 --port 5173
 ) &
 wait -n
 exit 1
