@@ -177,8 +177,9 @@ export function startVoiceCall(
         awaitingReply = onScreen && ask !== undefined && isApprovalAskBlock(ask);
         if (lastBot.runId === streamRunId) streamRunId = null;
         const rest = lastBot.runId ? replySpeech.finish(lastBot.runId, text, lastBot.id) : text;
-        if (rest) void say(rest);
-        send({ type: "state", phase: onScreen ? "on_screen" : "listening" });
+        // The new phase follows the reply's last audio, so the device knows the reply is whole.
+        const phase = onScreen ? "on_screen" : "listening";
+        void (rest ? say(rest) : Promise.resolve()).then(() => send({ type: "state", phase }));
         return;
       }
       if (!isRunWorking(thread.run?.status)) {

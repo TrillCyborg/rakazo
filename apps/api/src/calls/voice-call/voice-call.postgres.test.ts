@@ -104,6 +104,9 @@ describe.skipIf(!databaseUrl)("voice device call", () => {
         const say = received.findIndex((frame) => frame.type === "say");
         expect(say).toBeGreaterThan(-1);
         expect(received[say + 1]).toMatchObject({ type: "audio" });
+        // The device is told it may talk again only once the whole reply has been sent.
+        const lastAudio = received.findLastIndex((frame) => frame.type === "audio");
+        expect(received.slice(lastAudio)).toContainEqual({ type: "state", phase: "listening" });
       },
       { timeout: 60_000, interval: 50 },
     );
