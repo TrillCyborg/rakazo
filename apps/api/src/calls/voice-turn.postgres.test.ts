@@ -61,6 +61,7 @@ it.skipIf(!databaseUrl)(
         headers,
         body: JSON.stringify({
           botId,
+          callId: "device-call-1",
           audioBase64: Buffer.from("fake recording").toString("base64"),
           mimeType: "audio/wav",
         }),
@@ -71,10 +72,15 @@ it.skipIf(!databaseUrl)(
       expect(result.say.length).toBeGreaterThan(0);
 
       const thread = (await rpc("threads/get", { botId })) as {
-        messages: Array<{ role: string; blocks: Array<{ kind: string; text?: string }> }>;
+        messages: Array<{
+          role: string;
+          callId?: string;
+          blocks: Array<{ kind: string; text?: string }>;
+        }>;
       };
       const said = thread.messages.filter((message) => message.role === "user").at(-1);
       expect(said?.blocks).toContainEqual({ kind: "text", text: result.heard });
+      expect(said?.callId).toBe("device-call-1");
     } finally {
       await handles.stop();
       await rm(dataDir, { recursive: true, force: true });

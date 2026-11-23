@@ -3,11 +3,11 @@ import { createRouterClient } from "@orpc/server";
 import type { ThreadMessage, ThreadSnapshot, VoiceTurnResult } from "@rakazo/contracts";
 import { VoiceTurnInputSchema } from "@rakazo/contracts";
 import {
+  callClientNonce,
   callTurn,
   deadlineSignal,
   isApprovalAskBlock,
   isSecretAskBlock,
-  newClientId,
   speechFromBlocks,
 } from "@rakazo/core";
 import { runAsTenant } from "@rakazo/db";
@@ -69,7 +69,8 @@ export function mountVoiceTurnRoute(
       if (turn.kind === "enter_code" || turn.kind === "approve_on_screen") {
         return c.json(result("on_screen", heard, []));
       }
-      const clientNonce = `voice-turn:${newClientId()}`;
+      // A call message: the bot answers in short spoken sentences and the app shows one call.
+      const clientNonce = callClientNonce(input.data.callId);
       let runId: string | undefined;
       let cursor = thread.cursor;
       if (turn.kind === "answer") {

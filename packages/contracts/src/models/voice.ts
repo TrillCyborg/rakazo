@@ -72,6 +72,15 @@ export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
 /** A device's spoken turn, sent to `POST /api/voice/turn` as base64 audio. */
 export const VoiceTurnInputSchema = z.object({
   botId: Id,
+  /**
+   * The call this turn belongs to, chosen by the device and kept for the whole conversation.
+   * The device hangs up with `threads.endCall`, as the app does.
+   */
+  callId: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[^:]+$/),
   audioBase64: z.string().min(1),
   /** The recording's type, such as `audio/wav`. */
   mimeType: z.string().min(1).max(100),
