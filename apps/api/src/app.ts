@@ -120,6 +120,7 @@ import { createBillingService } from "./billing/billing.js";
 import { mountBillingRoutes } from "./billing/billing-webhook.js";
 import { createSpeechSummarizer } from "./calls/speech-summary.js";
 import { mountVoiceHttpRoutes } from "./calls/voice.js";
+import { createVoiceCallSockets } from "./calls/voice-call/voice-call-socket.js";
 import { homeRetentionSweep } from "./computers/home-retention.js";
 import { localSignupAdmitter, mountLocalComputerHost } from "./computers/local-settings.js";
 import { mountScreenTarget } from "./computers/screen-proxy.js";
@@ -180,8 +181,8 @@ export interface AppHandles {
   runtime: AgentRuntime;
   awaitIdle?: () => Promise<void>;
   backgroundFailures?: () => Array<{ name: string; count: number }>;
-  /** Node `upgrade` listener for desktop device sockets; absent when the feature is off. */
-  handleUpgrade?: UserDeviceHub["handleUpgrade"];
+  /** Node `upgrade` listener for voice device calls and desktop device sockets. */
+  handleUpgrade: ReturnType<typeof createVoiceCallSockets>["handleUpgrade"];
   /**
    * Stops this process. With `letRunsFinish`, the runs it is executing first end their turn, for
    * up to RUN_DRAIN_MS, while it claims nothing new; otherwise, or when a later stop arrives
@@ -868,6 +869,10 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   mountAccountExportRoute(app, { prisma, auth, artifacts, home });
   mountAuditExportRoute(app, { prisma, sessionActor });
   mountVoiceHttpRoutes(app, { prisma, secrets, env }, (c) => sessionActor(c.req.raw));
+  const voiceCalls = createVoiceCallSockets(
+    { prisma, secrets, env, router, requestSession },
+    userDeviceHub?.handleUpgrade,
+  );
   mountAccountImportRoute(
     app,
     { ...spaceDeletionDeps, maxArtifactBytes: env.maxUploadSizeBytes },
@@ -954,7 +959,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     runtime,
     awaitIdle: inMemoryJobs ? () => inMemoryJobs.awaitIdle() : undefined,
     backgroundFailures: inMemoryJobs ? () => inMemoryJobs.failureCounts() : undefined,
-    handleUpgrade: userDeviceHub?.handleUpgrade,
+    handleUpgrade: voiceCalls.handleUpgrade,
     stop: (options = {}) => {
       if (!options.letRunsFinish) runDrain.end();
       stopped ??= (async () => {
@@ -970,6 +975,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         // Handlers still running would otherwise query the pool after it ends.
         const requestsSettled = settleWithTimeout(inFlight.settled(), REQUEST_DRAIN_MS);
         auth.disposeOidcDiscovery();
+        voiceCalls.close();
         await userDeviceHub?.close();
         await oauthLogins.abortAll();
         await stopReferralEmails?.();

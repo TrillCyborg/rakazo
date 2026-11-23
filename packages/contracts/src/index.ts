@@ -69,6 +69,7 @@ export * from "./models/model-roles.js";
 export * from "./models/openai-compatible-ui.js";
 export * from "./models/provider-settings.js";
 export * from "./models/voice.js";
+export * from "./models/voice-call.js";
 export * from "./models/voice-connection-ui.js";
 export * from "./models/voice-errors.js";
 export * from "./personal-calendar/personal-calendar.js";
