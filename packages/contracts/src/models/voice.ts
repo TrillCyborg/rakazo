@@ -68,3 +68,28 @@ export const VoiceStatusSchema = z.object({
   voiceId: z.string(),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
+
+/** A device's spoken turn, sent to `POST /api/voice/turn` as base64 audio. */
+export const VoiceTurnInputSchema = z.object({
+  botId: Id,
+  audioBase64: z.string().min(1),
+  /** The recording's type, such as `audio/wav`. */
+  mimeType: z.string().min(1).max(100),
+  language: z.string().max(35).optional(),
+});
+export type VoiceTurnInput = z.infer<typeof VoiceTurnInputSchema>;
+
+/**
+ * What became of a spoken turn:
+ * - `replied`: `say` holds the reply, split into utterances to speak in order.
+ * - `on_screen`: the bot asked for a code or an approval, which is only given in the app.
+ * - `working`: the bot is still working; its reply will be in the app.
+ * - `failed`: the run stopped without a reply.
+ * - `unheard`: the recording held no words, so nothing was sent.
+ */
+export const VoiceTurnResultSchema = z.object({
+  status: z.enum(["replied", "on_screen", "working", "failed", "unheard"]),
+  heard: z.string(),
+  say: z.array(z.string()),
+});
+export type VoiceTurnResult = z.infer<typeof VoiceTurnResultSchema>;
