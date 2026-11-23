@@ -299,10 +299,16 @@ importers:
       tsx:
         specifier: 4.23.15
         version: 4.23.15
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
       zod:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2

@@ -21,6 +21,11 @@
       "development": "./src/clients/network-host.ts",
       "default": "./src/clients/network-host.ts"
     },
+    "./voice-call": {
+      "types": "./src/models/voice-call.ts",
+      "development": "./src/models/voice-call.ts",
+      "default": "./src/models/voice-call.ts"
+    },
     "./user-devices": {
       "types": "./src/account/user-devices.ts",
       "development": "./src/account/user-devices.ts",

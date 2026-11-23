@@ -25,8 +25,9 @@ try {
   const server = serve({ fetch: app.fetch, port: env.port, hostname: env.apiHost }, () => {
     logger.info("api listening", { "http.host": env.apiHost, "http.port": env.port });
   });
-  // Desktop apps hold an outbound socket so bots can reach the user's own computer.
-  if (handleUpgrade) server.on("upgrade", handleUpgrade);
+  // Voice devices hold a call open, and desktop apps an outbound socket so bots can reach the
+  // user's own computer.
+  server.on("upgrade", handleUpgrade);
 
   // A stop that hands runs back is killed 30 seconds after the signal; leave time for stop().
   const drain = trackConnections(server as Server);
