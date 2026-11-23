@@ -40,7 +40,10 @@ it.skipIf(!databaseUrl)(
         .map((value) => value.split(";")[0])
         .join("; ");
 
-      const requested = await auth("/device/code", { body: { client_id: "test-device" } });
+      const unknown = await auth("/device/code", { body: { client_id: "unknown-device" } });
+      expect(unknown.status).toBe(400);
+
+      const requested = await auth("/device/code", { body: { client_id: "voice-device" } });
       expect(requested.status).toBe(200);
       const code = (await requested.json()) as {
         device_code: string;
@@ -53,7 +56,7 @@ it.skipIf(!databaseUrl)(
           body: {
             grant_type: DEVICE_GRANT,
             device_code: code.device_code,
-            client_id: "test-device",
+            client_id: "voice-device",
           },
         });
 
@@ -65,7 +68,7 @@ it.skipIf(!databaseUrl)(
       const claimed = await auth(`/device?user_code=${encodeURIComponent(code.user_code)}`, {
         headers: { cookie },
       });
-      expect(await claimed.json()).toMatchObject({ status: "pending", client_id: "test-device" });
+      expect(await claimed.json()).toMatchObject({ status: "pending", client_id: "voice-device" });
       const approved = await auth("/device/approve", {
         body: { userCode: code.user_code },
         headers: { cookie },

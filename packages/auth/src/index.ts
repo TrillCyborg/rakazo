@@ -8,6 +8,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   DEVICE_SIGN_IN_PATH,
+  isDeviceSignInClient,
   LAST_SIGN_IN_COOKIE,
   PartnerClickId,
   SignupAttribution,
@@ -541,6 +542,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
       deviceAuthorization({
         verificationUri: new URL(DEVICE_SIGN_IN_PATH, env.webOrigin).href,
         expiresIn: "10m",
+        validateClient: (clientId) => isDeviceSignInClient(clientId),
       }),
       organization({
         allowUserToCreateOrganization: false,

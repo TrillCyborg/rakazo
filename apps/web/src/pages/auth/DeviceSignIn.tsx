@@ -1,4 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import type { DeviceSignInClient } from "@rakazo/contracts";
+import { isDeviceSignInClient } from "@rakazo/contracts";
 import { Button, Input, Label } from "@rakazo/ui-web";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -8,7 +10,7 @@ import { AuthFrame, submitClass } from "./Auth";
 
 type Step =
   | { kind: "enter" }
-  | { kind: "confirm"; userCode: string }
+  | { kind: "confirm"; userCode: string; client: DeviceSignInClient }
   | { kind: "done"; approved: boolean };
 
 /**
@@ -38,8 +40,9 @@ export function DeviceSignInPage() {
     if (!userCode) return;
     change.run(async () => {
       const result = await authClient.device({ query: { user_code: userCode } });
-      return !result.error && result.data?.status === "pending"
-        ? { kind: "confirm", userCode }
+      const client = result.data?.client_id;
+      return !result.error && result.data?.status === "pending" && isDeviceSignInClient(client)
+        ? { kind: "confirm", userCode, client }
         : null;
     });
   }
@@ -77,7 +80,7 @@ export function DeviceSignInPage() {
   if (step.kind === "confirm") {
     return (
       <AuthFrame
-        title={<Trans>Sign in this device?</Trans>}
+        title={<ConfirmTitle client={step.client} />}
         onSubmit={(event) => {
           event.preventDefault();
           answer(step.userCode, true);
@@ -132,4 +135,12 @@ export function DeviceSignInPage() {
       </Button>
     </AuthFrame>
   );
+}
+
+/** Names the kind of device asking, so a request from something unexpected stands out. */
+function ConfirmTitle({ client }: { client: DeviceSignInClient }) {
+  switch (client) {
+    case "voice-device":
+      return <Trans>Sign in this voice device?</Trans>;
+  }
 }
