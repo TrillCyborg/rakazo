@@ -22,7 +22,7 @@ export function openXaiLiveTranscription(
 ): VoiceTranscriptionStream {
   const socket = new WebSocket(url, { headers: { authorization: `Bearer ${apiKey}` } });
   const waiting: Uint8Array[] = [];
-  /** Text the server finalized as it went, in case its final event leaves the text out. */
+  /** Text the server finalized as it went: its final event only carries what was still open. */
   const finals: string[] = [];
   let ready = false;
   let closed = false;
@@ -71,10 +71,9 @@ export function openXaiLiveTranscription(
       if (event.is_final === true && typeof event.text === "string") finals.push(event.text.trim());
     } else if (event?.type === "transcript.done") {
       end();
-      const text = typeof event.text === "string" ? event.text : finals.join(" ");
       const duration = event.duration;
       settle?.resolve({
-        text: text.trim(),
+        text: finalText(finals, typeof event.text === "string" ? event.text.trim() : ""),
         ...(typeof duration === "number" && Number.isFinite(duration) && duration >= 0
           ? { usage: { model, unit: "seconds" as const, units: duration } }
           : {}),
@@ -112,6 +111,17 @@ export function openXaiLiveTranscription(
       fail(new Error("xAI live transcription was closed"));
     },
   };
+}
+
+/**
+ * The whole transcript. The final event's text is empty once the speech was finalized along the
+ * way, and holds the rest otherwise; a server that repeats the whole text there is taken as is.
+ */
+function finalText(finals: readonly string[], done: string): string {
+  const finalized = finals.filter(Boolean).join(" ");
+  if (!done || done === finalized) return finalized;
+  if (!finalized || done.startsWith(finalized)) return done;
+  return `${finalized} ${done}`;
 }
 
 function parseEvent(data: RawData): Record<string, unknown> | null {

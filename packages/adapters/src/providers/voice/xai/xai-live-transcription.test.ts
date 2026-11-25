@@ -63,17 +63,29 @@ describe("openXaiLiveTranscription", () => {
     ]);
   });
 
-  it("joins the finalized text when the final event carries none", async () => {
+  it("joins the text finalized along the way when the final event carries none", async () => {
     const server = await serve((socket, message) => {
       if (!isAudioDone(message)) return;
       socket.send(JSON.stringify({ type: "transcript.partial", text: "Hel", is_final: false }));
       socket.send(JSON.stringify({ type: "transcript.partial", text: "Hello.", is_final: true }));
       socket.send(JSON.stringify({ type: "transcript.partial", text: "Bye.", is_final: true }));
-      socket.send(JSON.stringify({ type: "transcript.done", duration: 2 }));
+      socket.send(JSON.stringify({ type: "transcript.done", text: "", duration: 2 }));
     });
 
     const stream = openXaiLiveTranscription(server.url, "xai-key", "stt-model");
     stream.write(new Uint8Array([1]));
+
+    await expect(stream.finish()).resolves.toMatchObject({ text: "Hello. Bye." });
+  });
+
+  it("adds the text the final event finalizes to what came before it", async () => {
+    const server = await serve((socket, message) => {
+      if (!isAudioDone(message)) return;
+      socket.send(JSON.stringify({ type: "transcript.partial", text: "Hello.", is_final: true }));
+      socket.send(JSON.stringify({ type: "transcript.done", text: "Bye.", duration: 2 }));
+    });
+
+    const stream = openXaiLiveTranscription(server.url, "xai-key", "stt-model");
 
     await expect(stream.finish()).resolves.toMatchObject({ text: "Hello. Bye." });
   });
