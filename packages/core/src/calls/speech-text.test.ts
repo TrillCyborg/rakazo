@@ -3,6 +3,7 @@ import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 import {
   narrateTool,
+  quickStartUtterances,
   sentenceKey,
   speakable,
   speechFromBlocks,
@@ -145,6 +146,36 @@ describe("speakable", () => {
     expect(
       speechFromBlocks([{ kind: "progress", text: "Searching the web: weather", activity: true }]),
     ).toBe("");
+  });
+});
+
+describe("quickStartUtterances", () => {
+  it("cuts a long first utterance at its first clause break and leaves the rest", () => {
+    expect(
+      quickStartUtterances([
+        "It's Brasília, with about 2.8 million people in the Federal District and more around it.",
+        "Anything else?",
+      ]),
+    ).toEqual([
+      "It's Brasília,",
+      "with about 2.8 million people in the Federal District and more around it.",
+      "Anything else?",
+    ]);
+  });
+
+  it("keeps a short first utterance, and a long one with no clause break, whole", () => {
+    const short = ["The capital of Brazil is Brasília.", "It has about 2.8 million people."];
+    expect(quickStartUtterances(short)).toEqual(short);
+    const unbroken = ["About 2.8 million people live in the Federal District of Brazil today."];
+    expect(quickStartUtterances(unbroken)).toEqual(unbroken);
+  });
+
+  it("skips a break that would leave either piece too short", () => {
+    expect(
+      quickStartUtterances([
+        "Yes, the capital of Brazil is Brasília and about 2.8 million people live there.",
+      ]),
+    ).toEqual(["Yes, the capital of Brazil is Brasília and about 2.8 million people live there."]);
   });
 });
 

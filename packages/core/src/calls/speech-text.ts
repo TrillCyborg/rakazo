@@ -242,6 +242,31 @@ export function toUtterances(input: string, { minChars = 12, maxChars = 320 } = 
   return out;
 }
 
+/** A first utterance longer than this is cut at a clause break, so the voice can start sooner. */
+const QUICK_START_MAX_CHARS = 60;
+/** Neither piece of a cut first utterance is shorter than this. */
+const QUICK_START_MIN_CHARS = 12;
+const CLAUSE_BREAK = /[,;:](?=\s)|\s[—–](?=\s)/g;
+
+/**
+ * Utterances whose first one is cut at its first clause break when it is long, so a voice that
+ * renders each utterance can start speaking on a short piece while it renders the rest. A long
+ * utterance with no clause break stays whole.
+ */
+export function quickStartUtterances(utterances: readonly string[]): string[] {
+  const [first, ...rest] = utterances;
+  if (!first || first.length <= QUICK_START_MAX_CHARS) return [...utterances];
+  for (const match of first.matchAll(CLAUSE_BREAK)) {
+    const end = match.index + match[0].length;
+    const head = first.slice(0, end).trim();
+    const tail = first.slice(end).trim();
+    if (head.length < QUICK_START_MIN_CHARS) continue;
+    if (tail.length < QUICK_START_MIN_CHARS) break;
+    return [head, tail, ...rest];
+  }
+  return [...utterances];
+}
+
 function splitLong(text: string, maxChars: number): string[] {
   const out: string[] = [];
   const segmenter =
