@@ -8,6 +8,9 @@ import WebSocket from "ws";
  */
 export const LIVE_TRANSCRIPT_TIMEOUT_MS = 1_500;
 
+/** Speech the server finalized, from `start` seconds into the audio. */
+type Final = { text: string; start: number | null };
+
 type Settle = { resolve(text: VoiceTranscription): void; reject(error: Error): void };
 
 /**
@@ -23,7 +26,7 @@ export function openXaiLiveTranscription(
   const socket = new WebSocket(url, { headers: { authorization: `Bearer ${apiKey}` } });
   const waiting: Uint8Array[] = [];
   /** Text the server finalized as it went: its final event only carries what was still open. */
-  const finals: string[] = [];
+  const finals: Final[] = [];
   let ready = false;
   let closed = false;
   let failure: Error | null = null;
@@ -68,12 +71,17 @@ export function openXaiLiveTranscription(
       if (result) endAudio();
       else sendWaiting();
     } else if (event?.type === "transcript.partial") {
-      if (event.is_final === true && typeof event.text === "string") finals.push(event.text.trim());
+      if (event.is_final === true && typeof event.text === "string") {
+        addFinal(finals, event.text.trim(), typeof event.start === "number" ? event.start : null);
+      }
     } else if (event?.type === "transcript.done") {
       end();
       const duration = event.duration;
       settle?.resolve({
-        text: finalText(finals, typeof event.text === "string" ? event.text.trim() : ""),
+        text: finalText(
+          finals.map((final) => final.text),
+          typeof event.text === "string" ? event.text.trim() : "",
+        ),
         ...(typeof duration === "number" && Number.isFinite(duration) && duration >= 0
           ? { usage: { model, unit: "seconds" as const, units: duration } }
           : {}),
@@ -111,6 +119,19 @@ export function openXaiLiveTranscription(
       fail(new Error("xAI live transcription was closed"));
     },
   };
+}
+
+/**
+ * The server can finalize the same speech again, as when the end of the audio closes an utterance
+ * it already finalized at a pause: the same text, or text starting no earlier, replaces it.
+ */
+function addFinal(finals: Final[], text: string, start: number | null) {
+  const replaced = finals.findIndex(
+    (final) =>
+      final.text === text || (start !== null && final.start !== null && final.start >= start),
+  );
+  if (replaced >= 0) finals.splice(replaced);
+  if (text) finals.push({ text, start });
 }
 
 /**
