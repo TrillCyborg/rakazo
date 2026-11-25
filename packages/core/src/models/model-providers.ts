@@ -1,10 +1,4 @@
-import type {
-  Bot,
-  ModelApiProtocol,
-  ModelCatalogEntry,
-  ModelSettings,
-  ThinkingLevel,
-} from "@rakazo/contracts";
+import type { Bot, ModelApiProtocol, ModelCatalogEntry, ModelSettings } from "@rakazo/contracts";
 import {
   canonicalPiProviderId,
   modelConnectionNames,
@@ -75,15 +69,6 @@ export function clampCatalogThinkingLevel(
     if (candidate && candidate !== "off" && available.includes(candidate)) return candidate;
   }
   return null;
-}
-
-/** The most a spoken call's turn thinks: the person is waiting to hear the reply. */
-const CALL_THINKING_LEVEL = "low" satisfies ThinkingLevel;
-
-/** The effort a call's turn runs at: the bot's own, unless that is above the call's. */
-export function callThinkingLevel(level: ThinkingLevel | null | undefined): ThinkingLevel {
-  const ceiling = THINKING_LEVELS.indexOf(CALL_THINKING_LEVEL);
-  return level && THINKING_LEVELS.indexOf(level) <= ceiling ? level : CALL_THINKING_LEVEL;
 }
 
 /** The subscriptions a person can sign in with instead of pasting an API key, as they know them. */

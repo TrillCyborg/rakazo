@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   botsWithOwnModel,
-  callThinkingLevel,
   canUseCompatibleModelAsDefault,
   chatModelChoices,
   clampCatalogThinkingLevel,
@@ -111,15 +110,6 @@ describe("pickCatalogModelId", () => {
 
   it("returns an empty string for an unknown provider", () => {
     expect(pickCatalogModelId(catalog, "nope", "openai/gpt-6-luna")).toBe("");
-  });
-});
-
-describe("callThinkingLevel", () => {
-  it("lowers a bot's effort to the call's and keeps a lighter one", () => {
-    expect(callThinkingLevel(null)).toBe("low");
-    expect(callThinkingLevel("high")).toBe("low");
-    expect(callThinkingLevel("minimal")).toBe("minimal");
-    expect(callThinkingLevel("off")).toBe("off");
   });
 });
 

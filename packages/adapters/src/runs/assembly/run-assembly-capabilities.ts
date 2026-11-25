@@ -3,7 +3,6 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { disabledBuiltinToolSet } from "@rakazo/contracts";
 import {
   BACKGROUND_HELPER_TRIGGER,
-  callThinkingLevel,
   chatAppConnectNote,
   HELPER_RESULT_TRIGGER,
   isCallClientNonce,
@@ -603,11 +602,7 @@ export async function resolveRunCapabilities(
     hasMessagingIdentity,
     paymentWalletEnabled,
     messagingContext,
-    // A hang-up run finishes what the call asked for after the person left, at the bot's effort.
-    mainRunModel:
-      voiceCall && !callEndRun
-        ? { ...mainRunModel, thinkingLevel: callThinkingLevel(mainRunModel.thinkingLevel) }
-        : mainRunModel,
+    mainRunModel,
     computerModel,
     sourceMessage,
     ownerStartedRun,
