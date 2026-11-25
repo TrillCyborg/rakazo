@@ -28,14 +28,22 @@ import {
   speechFromBlocks,
 } from "@rakazo/core";
 import { runAsTenant } from "@rakazo/db";
-import { bestEffort } from "@rakazo/logging";
+import { bestEffort, getLogger } from "@rakazo/logging";
 import type { createRouter } from "../../router.js";
 import { voiceErrorReply } from "../../voice/http-errors.js";
 import type { VoiceDeps } from "../voice.js";
 import { synthesizeVoice, transcribeVoice } from "../voice.js";
 
 type Router = ReturnType<typeof createRouter>;
-type Clip = { bytes: Uint8Array; mimeType: string };
+type Clip = { bytes: Uint8Array; mimeType: string; renderMs: number };
+
+/** How long each step of a turn took, from the moment the person let go, until its first audio. */
+type TurnTiming = {
+  endedAt: number;
+  transcribeMs?: number;
+  sentMs?: number;
+  replyTextMs?: number;
+};
 
 export type VoiceCallDeps = VoiceDeps & { router: Router };
 
@@ -98,23 +106,53 @@ export function startVoiceCall(
   let streamRunId: string | null = null;
   let botEndedCall = false;
   let ended = false;
+  /** The latest turn, until its reply's first audio is sent. */
+  let timing: TurnTiming | null = null;
 
   const send = (frame: VoiceCallServerFrame) => {
     if (!ended) out.send(frame);
+  };
+
+  const sinceTurn = (current: TurnTiming) => Date.now() - current.endedAt;
+
+  const replyWritten = () => {
+    if (timing) timing.replyTextMs ??= sinceTurn(timing);
+  };
+
+  const firstAudioSent = (clip: Clip, utterance: string) => {
+    const current = timing;
+    if (!current) return;
+    timing = null;
+    getLogger().info("voice_call.first_audio", {
+      "call.id": callId,
+      "bot.id": botId,
+      "voice_call.transcribe_ms": current.transcribeMs,
+      "voice_call.sent_ms": current.sentMs,
+      "voice_call.reply_text_ms": current.replyTextMs,
+      "voice_call.render_ms": clip.renderMs,
+      "voice_call.first_audio_ms": sinceTurn(current),
+      "voice_call.first_utterance_chars": utterance.length,
+      "voice_call.first_audio_bytes": clip.bytes.byteLength,
+    });
   };
 
   const newFeed = (): SpeechFeed =>
     createSpeechFeed<Clip>({
       prepare: async (text, feedSignal) =>
         (await rpc.voice.prepare({ text, botId }, { signal: feedSignal })).utterances,
-      render: (utterance, feedSignal) =>
-        runAsTenant(actor, () =>
+      render: async (utterance, feedSignal) => {
+        const started = Date.now();
+        const clip = await runAsTenant(actor, () =>
           synthesizeVoice(deps, actor, { text: utterance, botId, callId, signal: feedSignal }),
-        ),
+        );
+        return { ...clip, renderMs: Date.now() - started };
+      },
       // The device queues what it gets and plays it in order, so a clip is done once it is sent.
       play: async (clip, utterance) => {
         send({ type: "say", text: utterance, mimeType: clip.mimeType });
-        if (!ended) out.sendAudio(clip.bytes);
+        if (ended) return;
+        out.sendAudio(clip.bytes);
+        firstAudioSent(clip, utterance);
       },
     });
   let feed = newFeed();
@@ -153,6 +191,7 @@ export function startVoiceCall(
       const sentences = replySpeech.take(messages, replyRunId);
       if (sentences) {
         streamRunId = replyRunId;
+        replyWritten();
         void say(sentences, replyRunId);
       }
     }
@@ -179,6 +218,7 @@ export function startVoiceCall(
         const rest = lastBot.runId ? replySpeech.finish(lastBot.runId, text, lastBot.id) : text;
         // The new phase follows the reply's last audio, so the device knows the reply is whole.
         const phase = onScreen ? "on_screen" : "listening";
+        if (rest) replyWritten();
         void (rest ? say(rest) : Promise.resolve()).then(() => send({ type: "state", phase }));
         return;
       }
@@ -215,8 +255,10 @@ export function startVoiceCall(
     return thread;
   };
 
-  const runTurn = async (pcm: Uint8Array) => {
+  const runTurn = async (pcm: Uint8Array, endedAt: number) => {
     send({ type: "state", phase: "thinking" });
+    const turnTiming: TurnTiming = { endedAt };
+    timing = null;
     try {
       const { text } = await runAsTenant(actor, () =>
         transcribeVoice(deps, actor, {
@@ -228,6 +270,7 @@ export function startVoiceCall(
         }),
       );
       const words = text.trim();
+      turnTiming.transcribeMs = sinceTurn(turnTiming);
       send({ type: "heard", text: words });
       if (!words) {
         send({ type: "state", phase: awaitingReply ? "thinking" : "listening" });
@@ -258,6 +301,8 @@ export function startVoiceCall(
       const release = sends.track(callId, request);
       try {
         const receipt = await request;
+        turnTiming.sentMs = sinceTurn(turnTiming);
+        timing = turnTiming;
         awaitedRunId =
           turn.kind === "answer"
             ? turn.runId
@@ -333,10 +378,11 @@ export function startVoiceCall(
     },
     endTurn() {
       if (ended) return;
+      const endedAt = Date.now();
       const pcm = Buffer.concat(heard);
       heard = [];
       heardBytes = 0;
-      turns = turns.then(() => runTurn(new Uint8Array(pcm)));
+      turns = turns.then(() => runTurn(new Uint8Array(pcm), endedAt));
     },
     stop() {
       feed.stop();
