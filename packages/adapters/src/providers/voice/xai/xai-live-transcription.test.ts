@@ -90,6 +90,22 @@ describe("openXaiLiveTranscription", () => {
     await expect(stream.finish()).resolves.toMatchObject({ text: "Hello. Bye." });
   });
 
+  it("keeps one copy of speech the server finalizes twice", async () => {
+    const server = await serve((socket, message) => {
+      if (!isAudioDone(message)) return;
+      const final = { type: "transcript.partial", is_final: true };
+      socket.send(JSON.stringify({ ...final, text: "Hello.", start: 0 }));
+      socket.send(JSON.stringify({ ...final, text: "How are", start: 1.2 }));
+      socket.send(JSON.stringify({ ...final, text: "How are you?", start: 1.2 }));
+      socket.send(JSON.stringify({ ...final, text: "How are you?", start: 2.9 }));
+      socket.send(JSON.stringify({ type: "transcript.done", text: "", duration: 3 }));
+    });
+
+    const stream = openXaiLiveTranscription(server.url, "xai-key", "stt-model");
+
+    await expect(stream.finish()).resolves.toMatchObject({ text: "Hello. How are you?" });
+  });
+
   it("rejects when the server reports an error", async () => {
     const server = await serve((socket, message) => {
       if (isAudioDone(message))
