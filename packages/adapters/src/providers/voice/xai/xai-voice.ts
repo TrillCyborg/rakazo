@@ -7,6 +7,8 @@ import type {
   VoiceProvider,
   VoiceSynthesizeRequest,
   VoiceTranscribeRequest,
+  VoiceTranscribeStreamRequest,
+  VoiceTranscriptionStream,
   VoiceUsage,
   VoiceVerifyResult,
 } from "@rakazo/adapter-kit";
@@ -22,10 +24,12 @@ import {
   voiceUnreachable,
 } from "../../../voice/voice-http.js";
 import type { VoiceProviderDefinition } from "../../../voice/voice-provider-descriptor.js";
+import { openXaiLiveTranscription } from "./xai-live-transcription.js";
 
 export const XAI_VOICE_PROVIDER_ID = "xai";
 const TRANSCRIPTION_MODEL = "grok-voice-transcribe-2.0";
 const API = "https://api.x.ai/v1";
+const LIVE_TRANSCRIPTION = "wss://api.x.ai/v1/stt";
 const PROVIDER = "xAI";
 
 /**
@@ -142,6 +146,31 @@ export class XaiVoiceProvider implements VoiceProvider {
           }
         : {}),
     };
+  }
+
+  transcribeStream(
+    request: VoiceTranscribeStreamRequest,
+    context: AdapterContext,
+  ): VoiceTranscriptionStream {
+    const model = request.model || TRANSCRIPTION_MODEL;
+    const params = new URLSearchParams({
+      model,
+      encoding: "pcm",
+      sample_rate: String(request.sampleRate),
+      channels: String(request.channels),
+    });
+    const language = voiceLanguageHint(request.language);
+    if (language) {
+      params.set("language", language);
+      // Writes spoken numbers, prices and units as a person would type them.
+      params.set("format", "true");
+    }
+    return openXaiLiveTranscription(
+      `${LIVE_TRANSCRIPTION}?${params}`,
+      request.apiKey,
+      model,
+      request.signal ?? context.signal,
+    );
   }
 }
 

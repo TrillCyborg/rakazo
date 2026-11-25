@@ -7,6 +7,7 @@ import type {
   VoiceProvider,
   VoiceSynthesizeRequest,
   VoiceTranscribeRequest,
+  VoiceTranscriptionStream,
   VoiceVerifyResult,
 } from "@rakazo/adapter-kit";
 import type { VoiceProviderDefinition } from "../../../voice/voice-provider-descriptor.js";
@@ -52,6 +53,20 @@ export class ScriptedVoiceProvider implements VoiceProvider {
     _context: AdapterContext,
   ): Promise<{ text: string }> {
     return { text: SCRIPTED_TRANSCRIPT };
+  }
+
+  transcribeStream(): VoiceTranscriptionStream {
+    let closed = false;
+    return {
+      write() {},
+      finish: async () => {
+        if (closed) throw new Error("The scripted transcription was closed.");
+        return { text: SCRIPTED_TRANSCRIPT };
+      },
+      close() {
+        closed = true;
+      },
+    };
   }
 }
 

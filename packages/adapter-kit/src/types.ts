@@ -1012,6 +1012,32 @@ export interface VoiceTranscribeRequest {
   signal?: AbortSignal;
 }
 
+/** Audio transcribed while it is still being spoken, as raw signed 16-bit little-endian PCM. */
+export interface VoiceTranscribeStreamRequest {
+  model?: string;
+  sampleRate: number;
+  channels: number;
+  apiKey: string;
+  /** As in {@link VoiceTranscribeRequest}. */
+  language?: string;
+  signal?: AbortSignal;
+}
+
+export interface VoiceTranscription {
+  text: string;
+  usage?: VoiceUsage;
+  providerRequestId?: string;
+}
+
+/** One live transcription: audio goes in as it is heard, the text comes out once it ends. */
+export interface VoiceTranscriptionStream {
+  write(audio: Uint8Array): void;
+  /** No more audio. Rejects when the provider could not transcribe what it heard. */
+  finish(): Promise<VoiceTranscription>;
+  /** Drops the transcription without waiting for its text. */
+  close(): void;
+}
+
 export interface BackgroundJobPayloads {
   "run.continue": { runId: string };
   "page.revise": { requestId: string };
