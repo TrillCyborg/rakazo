@@ -24,6 +24,7 @@ import {
   isSecretAskBlock,
   isThreadSnapshotEvent,
   pendingCallSecretAsk,
+  quickStartUtterances,
   reduceThreadSnapshot,
   runThreadSubscription,
   speechFromBlocks,
@@ -112,6 +113,8 @@ export function startVoiceCall(
   let ended = false;
   /** The turn being spoken, transcribed as it is heard. Undefined when that cannot be done. */
   let live: Promise<VoiceTranscriptionStream | null | undefined> | null = null;
+  /** The next text said opens the reply to a turn, which starts on a short piece when it can. */
+  let replyOpening = false;
   /** The latest turn, until its reply's first audio is sent. */
   let timing: TurnTiming | null = null;
 
@@ -145,8 +148,12 @@ export function startVoiceCall(
 
   const newFeed = (): SpeechFeed =>
     createSpeechFeed<Clip>({
-      prepare: async (text, feedSignal) =>
-        (await rpc.voice.prepare({ text, botId }, { signal: feedSignal })).utterances,
+      prepare: async (text, feedSignal) => {
+        const opensReply = replyOpening;
+        replyOpening = false;
+        const { utterances } = await rpc.voice.prepare({ text, botId }, { signal: feedSignal });
+        return opensReply ? quickStartUtterances(utterances) : utterances;
+      },
       render: async (utterance, feedSignal) => {
         const started = Date.now();
         const clip = await runAsTenant(actor, () =>
@@ -340,6 +347,7 @@ export function startVoiceCall(
         const receipt = await request;
         turnTiming.sentMs = sinceTurn(turnTiming);
         timing = turnTiming;
+        replyOpening = true;
         awaitedRunId =
           turn.kind === "answer"
             ? turn.runId
