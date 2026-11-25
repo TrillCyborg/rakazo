@@ -2,7 +2,10 @@ import type { VoiceTranscription, VoiceTranscriptionStream } from "@rakazo/adapt
 import type { RawData } from "ws";
 import WebSocket from "ws";
 
-/** How long the text may take once the audio has ended, about what transcribing it whole takes. */
+/**
+ * A live transcript comes well within this once the audio ends. Past it, the caller transcribes
+ * the turn whole.
+ */
 export const LIVE_TRANSCRIPT_TIMEOUT_MS = 1_500;
 
 type Settle = { resolve(text: VoiceTranscription): void; reject(error: Error): void };
