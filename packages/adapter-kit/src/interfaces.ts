@@ -94,7 +94,9 @@ import type {
   VoiceModelInfo,
   VoiceSynthesizeRequest,
   VoiceTranscribeRequest,
-  VoiceUsage,
+  VoiceTranscribeStreamRequest,
+  VoiceTranscription,
+  VoiceTranscriptionStream,
   VoiceVerifyResult,
   WebFetchCapabilities,
   WebFetchRequest,
@@ -708,7 +710,12 @@ export interface VoiceProvider {
   transcribe?(
     request: VoiceTranscribeRequest,
     context: AdapterContext,
-  ): Promise<{ text: string; usage?: VoiceUsage; providerRequestId?: string }>;
+  ): Promise<VoiceTranscription>;
+  /** Transcribes audio as it is heard, so the text is ready soon after the speaker stops. */
+  transcribeStream?(
+    request: VoiceTranscribeStreamRequest,
+    context: AdapterContext,
+  ): VoiceTranscriptionStream;
 }
 
 /**

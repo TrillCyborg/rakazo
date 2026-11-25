@@ -1,5 +1,6 @@
 import type { RouterClient } from "@orpc/server";
 import { createRouterClient } from "@orpc/server";
+import type { VoiceTranscription, VoiceTranscriptionStream } from "@rakazo/adapter-kit";
 import { pcmToWav } from "@rakazo/adapters";
 import type {
   Actor,
@@ -33,6 +34,7 @@ import type { createRouter } from "../../router.js";
 import { voiceErrorReply } from "../../voice/http-errors.js";
 import type { VoiceDeps } from "../voice.js";
 import { synthesizeVoice, transcribeVoice } from "../voice.js";
+import { openVoiceTranscription } from "./live-transcription.js";
 
 type Router = ReturnType<typeof createRouter>;
 type Clip = { bytes: Uint8Array; mimeType: string; renderMs: number };
@@ -40,6 +42,8 @@ type Clip = { bytes: Uint8Array; mimeType: string; renderMs: number };
 /** How long each step of a turn took, from the moment the person let go, until its first audio. */
 type TurnTiming = {
   endedAt: number;
+  /** The words came from the transcription made while the person spoke. */
+  live?: boolean;
   transcribeMs?: number;
   sentMs?: number;
   replyTextMs?: number;
@@ -106,6 +110,8 @@ export function startVoiceCall(
   let streamRunId: string | null = null;
   let botEndedCall = false;
   let ended = false;
+  /** The turn being spoken, transcribed as it is heard. Undefined when that cannot be done. */
+  let live: Promise<VoiceTranscriptionStream | null | undefined> | null = null;
   /** The latest turn, until its reply's first audio is sent. */
   let timing: TurnTiming | null = null;
 
@@ -127,6 +133,7 @@ export function startVoiceCall(
       "call.id": callId,
       "bot.id": botId,
       "voice_call.transcribe_ms": current.transcribeMs,
+      "voice_call.live_transcript": current.live ?? false,
       "voice_call.sent_ms": current.sentMs,
       "voice_call.reply_text_ms": current.replyTextMs,
       "voice_call.render_ms": clip.renderMs,
@@ -255,20 +262,50 @@ export function startVoiceCall(
     return thread;
   };
 
-  const runTurn = async (pcm: Uint8Array, endedAt: number) => {
+  const openLive = () =>
+    bestEffort(
+      "open a live transcription",
+      runAsTenant(actor, () =>
+        openVoiceTranscription(deps, actor, {
+          ...VOICE_CALL_INPUT,
+          language: start.language,
+          signal,
+        }),
+      ),
+    );
+
+  /**
+   * A turn's words: from what was transcribed while the person spoke, else from the whole
+   * recording, which also checks a live transcript that heard nothing.
+   */
+  const transcribe = async (
+    pcm: Uint8Array,
+    turnLive: typeof live,
+    turnTiming: TurnTiming,
+  ): Promise<VoiceTranscription> => {
+    const stream = await turnLive;
+    const heardLive = stream && (await bestEffort("finish a live transcription", stream.finish()));
+    if (heardLive?.text.trim()) {
+      turnTiming.live = true;
+      return heardLive;
+    }
+    return runAsTenant(actor, () =>
+      transcribeVoice(deps, actor, {
+        audio: pcmToWav(pcm, VOICE_CALL_INPUT),
+        mimeType: "audio/wav",
+        language: start.language,
+        callId,
+        signal,
+      }),
+    );
+  };
+
+  const runTurn = async (pcm: Uint8Array, endedAt: number, turnLive: typeof live) => {
     send({ type: "state", phase: "thinking" });
     const turnTiming: TurnTiming = { endedAt };
     timing = null;
     try {
-      const { text } = await runAsTenant(actor, () =>
-        transcribeVoice(deps, actor, {
-          audio: pcmToWav(pcm, VOICE_CALL_INPUT),
-          mimeType: "audio/wav",
-          language: start.language,
-          callId,
-          signal,
-        }),
-      );
+      const { text } = await transcribe(pcm, turnLive, turnTiming);
       const words = text.trim();
       turnTiming.transcribeMs = sinceTurn(turnTiming);
       send({ type: "heard", text: words });
@@ -324,6 +361,8 @@ export function startVoiceCall(
   const finish = (reason: "hung_up" | "bot" | "signed_out" | "unavailable") => {
     if (ended) return;
     feed.stop();
+    void live?.then((stream) => stream?.close());
+    live = null;
     if (!botEndedCall) {
       // A hang-up closes the call server-side, which files its marker and lets the bot finish
       // what was asked on it, once every turn still being sent has landed.
@@ -375,14 +414,18 @@ export function startVoiceCall(
       if (ended || heardBytes + pcm.byteLength > MAX_TURN_PCM_BYTES) return;
       heard.push(pcm);
       heardBytes += pcm.byteLength;
+      live ??= openLive();
+      void live.then((stream) => stream?.write(pcm));
     },
     endTurn() {
       if (ended) return;
       const endedAt = Date.now();
       const pcm = Buffer.concat(heard);
+      const turnLive = live;
       heard = [];
       heardBytes = 0;
-      turns = turns.then(() => runTurn(new Uint8Array(pcm), endedAt));
+      live = null;
+      turns = turns.then(() => runTurn(new Uint8Array(pcm), endedAt, turnLive));
     },
     stop() {
       feed.stop();
